@@ -1,0 +1,40 @@
+// 国内镜像加速（阿里云）。把镜像插到每个仓库列表最前面，项目原有仓库顺序保留在后面兜底。
+// 删除本文件即可完全还原为默认行为。
+
+def ALIYUN = [
+    google : 'https://maven.aliyun.com/repository/google',
+    central: 'https://maven.aliyun.com/repository/central',
+    public : 'https://maven.aliyun.com/repository/public',
+    plugin : 'https://maven.aliyun.com/repository/gradle-plugin',
+]
+
+// urls 里的镜像放到头部，其余仓库按原顺序追加；已是这些镜像的条目先移除避免重复。
+def prepend = { repos, urls ->
+    if (repos == null) return
+    try {
+        def others = []
+        repos.each { r ->
+            def u = r.hasProperty('url') ? r.url?.toString() : null
+            if (u == null || !urls.contains(u)) others << r
+        }
+        repos.clear()
+        urls.each { u -> repos.maven { url = u } }
+        others.each { r -> repos.add(r) }
+    } catch (Throwable ignored) {
+        // 仓库容器不可写（例如 FAIL_ON_PROJECT_REPOS）时跳过，不影响构建
+    }
+}
+
+gradle.beforeSettings { settings ->
+    prepend(settings.pluginManagement?.repositories,
+            [ALIYUN.plugin, ALIYUN.public, ALIYUN.google, ALIYUN.central])
+    prepend(settings.dependencyResolutionManagement?.repositories,
+            [ALIYUN.google, ALIYUN.central, ALIYUN.public])
+}
+
+gradle.allprojects { project ->
+    prepend(project.buildscript.repositories,
+            [ALIYUN.google, ALIYUN.public, ALIYUN.central, ALIYUN.plugin])
+    prepend(project.repositories,
+            [ALIYUN.google, ALIYUN.central, ALIYUN.public])
+}
